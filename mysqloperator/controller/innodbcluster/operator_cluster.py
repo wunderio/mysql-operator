@@ -946,7 +946,64 @@ def on_innodbcluster_field_pod_annotations(body: Body, diff, old, new, logger: L
 
     on_ic_labels_and_annotations_change("annotations", body, diff, old, new, logger)
 
+# StatefulSet labels and annotations patch (stsLabels, stsAnnotations)
+def on_ic_sts_labels_and_annotations_change(what: str, body: Body, diff, logger: Logger) -> None:
+    cluster = InnoDBCluster(body)
 
+    # ignore spec changes if the cluster is still being initialized
+    if not cluster.ready:
+        logger.debug(f"Ignoring {what} change for unready cluster")
+        return
+
+    sts = cluster.get_stateful_set()
+    if sts and diff:
+        logger.info(f"on_ic_sts_labels_and_annotations_change: Updating InnoDB Cluster StatefulSet {what}")
+        patch = {field[0]: new for op, field, old, new in diff }
+        cluster_objects.update_stateful_set_spec(sts, { "metadata" : { what : patch }})
+
+
+@kopf.on.field(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL,
+               field="spec.stsLabels")  # type: ignore
+def on_innodbcluster_field_sts_labels(body: Body, diff, logger: Logger, **kwargs):
+
+    on_ic_sts_labels_and_annotations_change("labels", body, diff, logger)
+
+
+@kopf.on.field(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL,
+               field="spec.stsAnnotations")  # type: ignore
+def on_innodbcluster_field_sts_annotations(body: Body, new, diff, logger: Logger, **kwargs):
+
+    on_ic_sts_labels_and_annotations_change("annotations", body, diff, logger)
+
+# Router labels and annotations patch (dpLabels, dpAnnotations)
+def on_ic_router_dp_labels_and_annotations_change(what: str, body: Body, diff, logger: Logger) -> None:
+
+    cluster = InnoDBCluster(body)
+
+    # ignore spec changes if the cluster is still being initialized
+    if not cluster.ready:
+        logger.debug(f"Ignoring {what} change for unready cluster")
+        return
+
+    router_deploy = cluster.get_router_deployment()
+    if router_deploy and diff:
+        logger.info(f"on_ic_router_labels_and_annotations_change: Updating Router Deployment {what}")
+        patch = {field[0]: new for op, field, old, new in diff }
+        router_objects.update_dp_labels_or_annotations(what, patch, cluster, logger)
+
+@kopf.on.field(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL,
+                field="spec.router.dpLabels")  # type: ignore
+def on_innodbcluster_field_router_dp_labels(body: Body, diff, logger: Logger, **kwargs):
+    
+    on_ic_router_dp_labels_and_annotations_change("labels", body, diff, logger)
+
+@kopf.on.field(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL,
+                field="spec.router.dpAnnotations")  # type: ignore
+def on_innodbcluster_field_router_dp_annotations(body: Body, new, diff, logger: Logger, **kwargs):
+
+    on_ic_router_dp_labels_and_annotations_change("annotations", body, diff, logger)
+
+    
 def on_ic_router_labels_and_annotations_change(what: str, body: Body, diff, logger: Logger) -> None:
     cluster = InnoDBCluster(body)
 

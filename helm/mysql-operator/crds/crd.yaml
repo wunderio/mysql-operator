@@ -65,6 +65,12 @@ spec:
                   maximum: 4294967195
                   default: 1000
                   description: "Base value for MySQL server_id for instances in the cluster"
+                datadirVolumeClaimAnnotations:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                datadirVolumeClaimLabels:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 datadirVolumeClaimTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
@@ -78,6 +84,12 @@ spec:
                   maximum: 9
                   default: 1
                   description: "Number of MySQL replica instances for the cluster"
+                stsAnnotations:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                stsLabels:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 podSpec:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
@@ -285,6 +297,12 @@ spec:
                       type: string
                       pattern: '^\d+\.\d+\.\d+(-.+)?'
                       description: "Override MySQL Router version"
+                    dpAnnotations:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    dpLabels:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
                     podSpec:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true

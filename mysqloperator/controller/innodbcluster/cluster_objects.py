@@ -510,6 +510,17 @@ spec:
 
     statefulset = yaml.safe_load(tmpl.replace("\n\n", "\n"))
 
+    stsMetadata = {}
+    if spec.stsAnnotations:
+        print("\t\tAdding stsAnnotations")
+        stsMetadata['annotations'] = spec.stsAnnotations
+    if spec.stsLabels:
+        print("\t\tAdding stsLabels")
+        stsMetadata['labels'] = spec.stsLabels
+
+    if len(stsMetadata):
+        utils.merge_patch_object(statefulset, {"metadata" : stsMetadata })
+    
     metadata = {}
     if spec.podAnnotations:
         print("\t\tAdding podAnnotations")
@@ -535,10 +546,21 @@ spec:
         utils.merge_patch_object(statefulset["spec"]["template"]["spec"],
                                  spec.podSpec, "spec.podSpec")
 
+    datadirVolumeClaimMetadata = {}
+    if spec.datadirVolumeClaimAnnotations:
+        print("\t\tAdding datadirVolumeClaim Annotations")
+        datadirVolumeClaimMetadata['annotations'] = spec.datadirVolumeClaimAnnotations
+    if spec.datadirVolumeClaimLabels:
+        print("\t\tAdding datadirVolumeClaim Labels")
+        datadirVolumeClaimMetadata['labels'] = spec.datadirVolumeClaimLabels
+    if len(datadirVolumeClaimMetadata):
+        utils.merge_patch_object(statefulset["spec"]["volumeClaimTemplates"][0], {"metadata" : datadirVolumeClaimMetadata })
+
     if spec.datadirVolumeClaimTemplate:
         print("\t\tAdding datadirVolumeClaimTemplate")
         utils.merge_patch_object(statefulset["spec"]["volumeClaimTemplates"][0]["spec"],
                                  spec.datadirVolumeClaimTemplate, "spec.volumeClaimTemplates[0].spec")
+        
     return statefulset
 
 def update_stateful_set_size(cluster: InnoDBCluster, rr_spec: ReadReplicaSpec, logger: Logger) -> None:
