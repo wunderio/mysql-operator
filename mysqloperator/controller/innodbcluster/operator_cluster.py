@@ -947,6 +947,31 @@ def on_innodbcluster_field_pod_annotations(body: Body, diff, old, new, logger: L
     on_ic_labels_and_annotations_change("annotations", body, diff, old, new, logger)
 
 
+# Reconcile statefulset resource with the cluster spec
+@kopf.on.update(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL)  # type: ignore
+def on_innodbcluster_update(body: Body, old: Body, new: Body, diff, logger: Logger, **kwargs):
+    cluster = InnoDBCluster(body)
+
+    # ignore spec changes if the cluster is still being initialized
+    if not cluster.ready:
+        logger.debug("Ignoring update for unready cluster")
+        return
+    
+    sts = cluster.get_stateful_set()
+
+    # Reset statefulset replicas when the number of replicas differs from the number of instances
+    if sts and sts.spec.replicas != cluster.parsed_spec.instances:
+        logger.info(f"on_innodbcluster_update: Updating InnoDB Cluster StatefulSet.replicas from {sts.spec.replicas} to {cluster.parsed_spec.instances}")
+        cluster.parsed_spec.validate(logger)
+        cluster_objects.update_stateful_set_spec(sts, {"spec": {"replicas": cluster.parsed_spec.instances}})
+
+    # Reset router deployment replicas when the number of replicas differs from the number of instances
+    router_deploy = cluster.get_router_deployment()
+    if router_deploy and router_deploy.spec.replicas != cluster.parsed_spec.router.instances:
+        logger.info(f"on_innodbcluster_update: Updating Router Deployment.replicas from {router_deploy.spec.replicas} to {cluster.parsed_spec.router.instances}")
+        router_objects.update_size(cluster, cluster.parsed_spec.router.instances, logger)
+
+
 def on_ic_router_labels_and_annotations_change(what: str, body: Body, diff, logger: Logger) -> None:
     cluster = InnoDBCluster(body)
 
