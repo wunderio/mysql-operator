@@ -752,6 +752,9 @@ class RouterSpec:
     # Router version, if user wants to override it (latest by default)
     version: str = None # config.DEFAULT_ROUTER_VERSION_TAG
 
+    dpLabels: dict = {}
+    dpAnnotations: dict = {}
+
     podSpec: dict = {}
     podAnnotations: Optional[dict] = None
     podLabels: Optional[dict] = None
@@ -772,6 +775,12 @@ class RouterSpec:
 
         if "tlsSecretName" in spec:
             self.tlsSecretName = dget_str(spec, "tlsSecretName", prefix)
+
+        if "dpLabels" in spec:
+            self.dpLabels = dget_dict(spec, "dpLabels", prefix)
+        
+        if "dpAnnotations" in spec:
+            self.dpAnnotations = dget_dict(spec, "dpAnnotations", prefix)
 
         if "podSpec" in spec:  # TODO - replace with something more specific
             self.podSpec = dget_dict(spec, "podSpec", prefix)
@@ -860,9 +869,15 @@ class AbstractServerSetSpec(abc.ABC):
     # base value for server_id
     baseServerId: int
     # override volumeClaimTemplates for datadir in MySQL pods (optional)
+    datadirVolumeClaimLabels: dict = {}
+    datadirVolumeClaimAnnotations: dict = {}
     datadirVolumeClaimTemplate = None
     # additional MySQL configuration options
     mycnf: str = ""
+
+    stsLabels: dict = {}
+    stsAnnotations: dict = {}
+
     # override pod template for MySQL (optional)
     podSpec: dict = {}
     podAnnotations: Optional[dict] = None
@@ -951,6 +966,12 @@ class AbstractServerSetSpec(abc.ABC):
         if "imageRepository" in spec_root:
             self.imageRepository = dget_str(spec_root, "imageRepository", "spec")
 
+        if "stsLabels" in spec_specific:
+            self.stsLabels = dget_dict(spec_specific, "stsLabels", where_specific)
+
+        if "stsAnnotations" in spec_specific:
+            self.stsAnnotations = dget_dict(spec_specific, "stsAnnotations", where_specific)
+
         if "podSpec" in spec_specific:  # TODO - replace with something more specific
             self.podSpec = dget_dict(spec_specific, "podSpec", where_specific)
 
@@ -959,6 +980,12 @@ class AbstractServerSetSpec(abc.ABC):
 
         if "podLabels" in spec_specific:
             self.podLabels = dget_dict(spec_specific, "podLabels", where_specific)
+
+        if "datadirVolumeClaimLabels" in spec_specific:
+            self.datadirVolumeClaimLabels = dget_dict(spec_specific, "datadirVolumeClaimLabels", where_specific)
+
+        if "datadirVolumeClaimAnnotations" in spec_specific:
+            self.datadirVolumeClaimAnnotations = dget_dict(spec_specific, "datadirVolumeClaimAnnotations", where_specific)
 
         if "datadirVolumeClaimTemplate" in spec_specific:
             self.datadirVolumeClaimTemplate = dget_dict(spec_specific, "datadirVolumeClaimTemplate", where_specific)

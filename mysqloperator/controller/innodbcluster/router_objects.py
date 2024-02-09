@@ -247,6 +247,15 @@ spec:
         "value": router_bootstrap_options
     })
 
+    dpMetadata = {}
+    if spec.router.dpAnnotations:
+        dpMetadata['annotations'] = spec.router.dpAnnotations
+    if spec.router.dpLabels:
+        dpMetadata['labels'] = spec.router.dpLabels
+
+    if len(dpMetadata):
+        utils.merge_patch_object(deployment["metadata"], dpMetadata)
+
     metadata = {}
     if spec.router.podAnnotations:
         metadata['annotations'] = spec.router.podAnnotations
@@ -292,6 +301,12 @@ spec:
 
     return deployment
 
+def update_dp_labels_or_annotations(what: str, what_value: dict, cluster: InnoDBCluster, logger: Logger) -> None:
+    deploy = cluster.get_router_deployment()
+    # if the size is 0 it might not exist. In this case the proper labels and annotations will be set when eventually created
+    if deploy:
+        patch = { "metadata" : { what : what_value }}
+        api_apps.patch_namespaced_deployment(deploy.metadata.name, deploy.metadata.namespace, body=patch)
 
 def update_labels_or_annotations(what: str, what_value: dict, cluster: InnoDBCluster, logger: Logger) -> None:
     deploy = cluster.get_router_deployment()

@@ -38,6 +38,12 @@ spec:
   tlsUseSelfSigned: {{ $use_self_signed }}
   router:
     instances: {{ required "router.instances is required" $routerInstances }}
+{{ if (((.Values).router).dpLabels) }}
+    dpLabels: {{ toYaml (((.Values).router).dpLabels) | nindent 6 }}
+{{ end }}
+{{ if (((.Values).router).dpAnnotations) }}
+    dpAnnotations: {{ toYaml (((.Values).router).dpAnnotations) | nindent 6 }}
+{{ end }}
 {{- if (((.Values).router).podSpec) }}
     podSpec:  {{ toYaml (((.Values).router).podSpec) | nindent 6 }}
 {{- end }}
@@ -98,6 +104,13 @@ spec:
 {{ (((.Values).serverConfig).mycnf) | indent 4 }}
   {{- end }}
 {{- end }}
+ # datadirVolumeClaimTemplate Labels
+{{- if ((.Values).datadirVolumeClaimLabels) }}
+  datadirVolumeClaimLabels: {{ toYaml ((.Values).datadirVolumeClaimLabels) | nindent 4 }}
+{{- end }}
+  # datadirVolumeClaimTemplate Annotations
+{{- if ((.Values).datadirVolumeClaimAnnotations) }}
+  datadirVolumeClaimAnnotations: {{ toYaml ((.Values).datadirVolumeClaimAnnotations) | nindent 4 }}
   # datadirVolumeClaimTemplate
 {{- if (.Values).datadirVolumeClaimTemplate }}
   {{- with .Values.datadirVolumeClaimTemplate }}
@@ -402,6 +415,14 @@ spec:
       {{- fail "Neither backupProfileName nor backupProfile provided for a schedule" }}
     {{- end }}
   {{- end }}
+{{- end }}
+ # Statefulset Labels
+{{- if ((.Values).stsLabels) }}
+  stsLabels: {{ toYaml ((.Values).stsLabels) | nindent 4 }}
+{{- end }}
+  # Statefulset Annotations
+{{- if ((.Values).stsAnnotations) }}
+  stsAnnotations: {{ toYaml ((.Values).stsAnnotations) | nindent 4 }}
 {{- end }}
   # Pod Spec
 {{- if ((.Values).podSpec) }}
