@@ -958,7 +958,13 @@ def on_ic_sts_labels_and_annotations_change(what: str, body: Body, diff, logger:
     sts = cluster.get_stateful_set()
     if sts and diff:
         logger.info(f"on_ic_sts_labels_and_annotations_change: Updating InnoDB Cluster StatefulSet {what}")
-        patch = {field[0]: new for op, field, old, new in diff }
+        patch = {}
+        for op, field, old, new in diff:
+            if op == 'add' or op == 'replace':
+                patch[field[0]] = new
+            elif op == 'remove':
+                for k in old:
+                    patch[k] = None
         cluster_objects.update_stateful_set_spec(sts, { "metadata" : { what : patch }})
 
 
@@ -988,7 +994,13 @@ def on_ic_router_dp_labels_and_annotations_change(what: str, body: Body, diff, l
     router_deploy = cluster.get_router_deployment()
     if router_deploy and diff:
         logger.info(f"on_ic_router_labels_and_annotations_change: Updating Router Deployment {what}")
-        patch = {field[0]: new for op, field, old, new in diff }
+        patch = {}
+        for op, field, old, new in diff:
+            if op == 'add' or op == 'replace':
+                patch[field[0]] = new
+            elif op == 'remove':
+                for k in old:
+                    patch[k] = None
         router_objects.update_dp_labels_or_annotations(what, patch, cluster, logger)
 
 @kopf.on.field(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL,
@@ -1007,26 +1019,91 @@ def on_innodbcluster_field_router_dp_annotations(body: Body, new, diff, logger: 
 # Reconcile statefulset resource with the cluster spec
 @kopf.on.update(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL)  # type: ignore
 def on_innodbcluster_update(body: Body, old: Body, new: Body, diff, logger: Logger, **kwargs):
+
     cluster = InnoDBCluster(body)
 
     # ignore spec changes if the cluster is still being initialized
     if not cluster.ready:
         logger.debug("Ignoring update for unready cluster")
         return
-    
+
     sts = cluster.get_stateful_set()
-
-    # Reset statefulset replicas when the number of replicas differs from the number of instances
-    if sts and sts.spec.replicas != cluster.parsed_spec.instances:
-        logger.info(f"on_innodbcluster_update: Updating InnoDB Cluster StatefulSet.replicas from {sts.spec.replicas} to {cluster.parsed_spec.instances}")
-        cluster.parsed_spec.validate(logger)
-        cluster_objects.update_stateful_set_spec(sts, {"spec": {"replicas": cluster.parsed_spec.instances}})
-
-    # Reset router deployment replicas when the number of replicas differs from the number of instances
     router_deploy = cluster.get_router_deployment()
-    if router_deploy and router_deploy.spec.replicas != cluster.parsed_spec.router.instances:
-        logger.info(f"on_innodbcluster_update: Updating Router Deployment.replicas from {router_deploy.spec.replicas} to {cluster.parsed_spec.router.instances}")
-        router_objects.update_size(cluster, cluster.parsed_spec.router.instances, logger)
+
+    # Recreate missing components on update
+    if not sts:
+        sts = cluster_objects.prepare_cluster_stateful_set(cluster.parsed_spec, logger)
+        kopf.adopt(sts)
+        api_apps.create_namespaced_stateful_set(namespace=cluster.namespace, body=sts)
+    if not router_deploy:
+        router_deploy = router_objects.prepare_router_deployment(cluster, logger)
+        kopf.adopt(router_deploy)
+        api_apps.create_namespaced_deployment(namespace=cluster.namespace, body=router_deploy)
+
+    # Following fields are always updated in the statefulset and router deployment:
+    # instances, podSpec.nodeSelector, podSpec.tolerations, podSpec.affinity, podSpec.containers[0].resources
+    # Fields are always compared as diff can be empty for failed resource updates
+    
+    field_mapping = [
+        # Statefulset fields
+        [{"object": cluster, "field": ['spec', 'instances']}, {"object": sts, "field": ['spec', 'replicas']}],
+        [{"object": cluster, "field": ['spec', 'podSpec', 'nodeSelector']}, {"object": sts, "field": ['spec', 'template', 'spec', 'node_selector']}],
+        [{"object": cluster, "field": ['spec', 'podSpec', 'tolerations']}, {"object": sts, "field": ['spec', 'template', 'spec', 'tolerations']}],
+        [{"object": cluster, "field": ['spec', 'podSpec', 'affinity']}, {"object": sts, "field": ['spec', 'template', 'spec', 'affinity']}],
+        [{"object": cluster, "field": ['spec', 'podSpec', 'containers', 0, 'resources', 'requests']}, {"object": sts, "field": ['spec', 'template', 'spec', 'containers', 1, 'resources', 'requests']}],
+        [{"object": cluster, "field": ['spec', 'podSpec', 'containers', 0, 'resources', 'limits']}, {"object": sts, "field": ['spec', 'template', 'spec', 'containers', 1, 'resources', 'limits']}],
+        
+        # volumeClaimTemplate field update is forbidden by the admission controller
+        # Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 
+        # 'updateStrategy', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"
+        #[{"object": cluster, "field": ['spec', 'datadirVolumeClaimTemplate', 'resources', 'requests', 'storage']},
+        #    {"object": sts, "field": ['spec', 'volumeClaimTemplates', 0, 'spec', 'resources', 'requests', 'storage']}],
+        
+        # Router (ds) fields
+        [{"object": cluster, "field": ['spec', 'router', 'instances']}, {"object": router_deploy, "field": ['spec', 'replicas']}],
+        [{"object": cluster, "field": ['spec', 'router', 'podSpec', 'nodeSelector']}, {"object": router_deploy, "field": ['spec', 'template', 'spec', 'node_selector']}],
+        [{"object": cluster, "field": ['spec', 'router', 'podSpec', 'tolerations']}, {"object": router_deploy, "field": ['spec', 'template', 'spec', 'tolerations']}],
+        [{"object": cluster, "field": ['spec', 'router', 'podSpec', 'affinity']}, {"object": router_deploy, "field": ['spec', 'template', 'spec', 'affinity']}],
+        [{"object": cluster, "field": ['spec', 'router', 'podSpec', 'containers', 0, 'resources', 'requests']}, {"object": router_deploy, "field": ['spec', 'template', 'spec', 'containers', 0, 'resources', 'requests']}],
+        [{"object": cluster, "field": ['spec', 'router', 'podSpec', 'containers', 0, 'resources', 'limits']}, {"object": router_deploy, "field": ['spec', 'template', 'spec', 'containers', 0, 'resources', 'limits']}],
+    ]
+
+    updateResources = False
+    for mapping in field_mapping:
+        if get_field(mapping[0]["object"], mapping[0]["field"]) != get_field(mapping[1]["object"], mapping[1]["field"]):
+            updateResources = True
+       
+    if updateResources:
+        # Update statefulset
+        # cluster_objects.update_stateful_set_spec and cluster_objects.reconcile_stateful_set merges changes, 
+        # does not fully replace fields, have to replace all statefulset instead
+        sts = cluster_objects.prepare_cluster_stateful_set(cluster.parsed_spec, logger)
+        kopf.adopt(sts)
+        api_apps.replace_namespaced_stateful_set(namespace=cluster.namespace, body=sts, name=cluster.name)
+
+        # Update router deployment
+        router_deploy = router_objects.prepare_router_deployment(cluster, logger)
+        kopf.adopt(router_deploy)
+        api_apps.replace_namespaced_deployment(namespace=cluster.namespace, body=router_deploy, name=cluster.name + "-router")
+
+# Get recursive value of a field in a dictionary or object
+def get_field(d: object, field: list):
+    if len(field) == 0:
+        return d
+    else:
+        try:
+            if isinstance(d, dict):
+                return get_field(d[field[0]], field[1:])
+            elif isinstance(d, list):
+                return get_field(d[int(field[0])], field[1:])
+            elif hasattr(d, field[0]):
+                return get_field(getattr(d, field[0]), field[1:])
+            elif field[0] in d:
+                return get_field(d[field[0]], field[1:])
+            else:
+                return None
+        except (KeyError, TypeError):
+            return None
 
 def on_ic_router_labels_and_annotations_change(what: str, body: Body, diff, logger: Logger) -> None:
     cluster = InnoDBCluster(body)
