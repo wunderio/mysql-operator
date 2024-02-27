@@ -1791,10 +1791,15 @@ class InnoDBCluster(K8sInterfaceObject):
         }
 
     def get_admin_account(self) -> Tuple[str, str]:
-        secrets = self.get_private_secrets()
+        try:
+            secrets = self.get_private_secrets()
 
-        return (utils.b64decode(secrets.data["clusterAdminUsername"]),
-                utils.b64decode(secrets.data["clusterAdminPassword"]))
+            return (utils.b64decode(secrets.data["clusterAdminUsername"]),
+                    utils.b64decode(secrets.data["clusterAdminPassword"]))
+        except ApiException as e:
+            if e.status == 404:
+                return ("", "")
+            raise
 
     @classmethod
     def get_service_account(cls, spec: AbstractServerSetSpec) -> api_client.V1ServiceAccount:

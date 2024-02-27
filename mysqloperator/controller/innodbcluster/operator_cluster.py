@@ -1016,13 +1016,13 @@ def on_innodbcluster_field_router_dp_annotations(body: Body, new, diff, logger: 
     on_ic_router_dp_labels_and_annotations_change("annotations", body, diff, logger)
 
     
-# Reconcile statefulset resource with the cluster spec
+# Reconcile mysqld (statefulset) and router (deployment) with the cluster spec on innodbcluster update
 @kopf.on.update(consts.GROUP, consts.VERSION, consts.INNODBCLUSTER_PLURAL)  # type: ignore
 def on_innodbcluster_update(body: Body, old: Body, new: Body, diff, logger: Logger, **kwargs):
 
     cluster = InnoDBCluster(body)
 
-    # ignore spec changes if the cluster is still being initialized
+    # Ignore spec changes if the cluster is still being initialized
     if not cluster.ready:
         logger.debug("Ignoring update for unready cluster")
         return

@@ -423,7 +423,7 @@ spec:
           periodSeconds: 3
           failureThreshold: 10000
           successThreshold: 1
-          timeout: 2
+          timeoutSeconds: 2
         readinessProbe:
           exec:
             command: ["/readinessprobe.sh"]
@@ -437,7 +437,7 @@ spec:
           periodSeconds: 15
           failureThreshold: 10
           successThreshold: 1
-          timeout: 5
+          timeoutSeconds: 5
         env:
         - name: MYSQL_UNIX_PORT
           value: /var/run/mysqld/mysql.sock
